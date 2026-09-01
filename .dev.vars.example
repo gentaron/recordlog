@@ -1,0 +1,8 @@
+# Copy to `.dev.vars` for local development (`npm run dev:worker`).
+# In production these are set with `wrangler secret put <NAME>` instead.
+
+# Leave unset to run without a passphrase (local only — never on a public host).
+AUTH_PASSPHRASE=change-me
+
+# Signs the session cookie. Any long random string; rotating it logs every device out.
+SESSION_SECRET=change-me-too

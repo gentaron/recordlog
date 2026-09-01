@@ -1,0 +1,22 @@
+node_modules/
+dist/
+dist-ssr/
+.wrangler/
+.vite/
+*.local
+
+# Wrangler dev secrets — never commit these.
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Test artifacts
+tests/e2e/artifacts/
+coverage/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
