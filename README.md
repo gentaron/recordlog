@@ -122,6 +122,20 @@ npm run deploy
 `https://recordlog.<your-subdomain>.workers.dev` が出ます。スマホで開いて、
 共有 →「ホーム画面に追加」(iOS) か、表示されるインストールボタン (Android/PC) で入れてください。
 
+#### GitHub 連携 (Cloudflare Workers Builds) で自動デプロイする場合
+
+ダッシュボード側に build コマンドを設定する必要は**ありません**。PWA のビルドは
+`wrangler.jsonc` の `build.command` に書いてあるので、Workers Builds の
+**Deploy command** が既定の `npx wrangler deploy` のままで、
+`npm run build` → `dist/` 生成 → デプロイまで一気に走ります。
+
+ただし **手順 1〜3 を先に済ませておくこと。** `database_id` が
+`REPLACE_WITH_YOUR_D1_DATABASE_ID` のままだと、ビルド冒頭の preflight が
+何をすればいいかを出したうえで止まります。R2 バケットも先に作っておいてください。
+
+`AUTH_PASSPHRASE` と `SESSION_SECRET` は `wrangler secret put` で入れたものが
+そのまま使われます（Workers Builds 側で環境変数として入れ直す必要はありません）。
+
 ---
 
 ## ローカル開発
@@ -152,6 +166,31 @@ curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+18+*+*+*"
 npx wrangler d1 execute recordlog --local \
   --command "SELECT ran_at, day, trigger, status, memo_count, detail FROM runs ORDER BY ran_at DESC LIMIT 10"
 ```
+
+---
+
+## トラブルシューティング
+
+**`The directory specified by the "assets.directory" field ... does not exist: /opt/buildhome/repo/dist`**
+`dist/` を作る前に `wrangler deploy` が走っています。`wrangler.jsonc` の
+`build.command` が消えていないか確認してください。ここに書いてあれば
+`wrangler deploy` / `wrangler dev` のどちらでも先にビルドが走ります。
+
+**`preflight: Cloudflare 側のセットアップが未完了です`**
+メッセージのとおり、D1 を作って `database_id` を貼り替えてください。
+ローカルビルドでは警告だけで止まりません。
+
+**日次まとめが走っていない**
+`runs` テーブルを見てください。理由が残っています。
+
+```bash
+npx wrangler d1 execute recordlog --remote \
+  --command "SELECT ran_at, day, trigger, status, memo_count, detail FROM runs ORDER BY ran_at DESC LIMIT 10"
+```
+
+`status = 'error'` で `detail` に Workers AI のエラーが出ていれば、無料枠の
+Neurons を使い切っている可能性があります。翌日には戻り、取りこぼした日は次の実行で
+追いつきます。
 
 ---
 

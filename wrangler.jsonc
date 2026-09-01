@@ -6,6 +6,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
+  // Cloudflare Workers Builds runs `npx wrangler deploy` with no build step of
+  // its own, so the PWA build is declared here rather than in a deploy script.
+  // Both `wrangler deploy` and `wrangler dev` now produce dist/ before they
+  // need it, locally and in CI alike.
+  "build": { "command": "npm run build" },
+
   // The Worker owns /api/* ; everything else is served from the built PWA in dist/.
   "assets": {
     "directory": "./dist",
