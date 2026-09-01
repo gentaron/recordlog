@@ -1,6 +1,7 @@
 export interface Env {
   DB: D1Database;
-  AUDIO: R2Bucket;
+  /** Optional: present only when the R2 bucket is bound. See wrangler.jsonc. */
+  AUDIO?: R2Bucket;
   AI: Ai;
   ASSETS: Fetcher;
 

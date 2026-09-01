@@ -285,6 +285,7 @@ export async function runDailyStack(env: Env): Promise<{ day: string; ok: boolea
 
 /** Deletes R2 audio past the retention window. Transcripts are kept forever. */
 export async function pruneAudio(env: Env): Promise<number> {
+  if (!env.AUDIO) return 0;
   const days = Number(env.KEEP_AUDIO_DAYS ?? '14');
   if (!Number.isFinite(days) || days <= 0) return 0;
   const cutoff = shiftDay(dayKey(Date.now(), env.APP_TIMEZONE || 'Asia/Tokyo'), -days);

@@ -42,6 +42,7 @@ const sessionInfo = async (c: { req: { raw: Request }; env: Env }): Promise<Sess
   timezone: c.env.APP_TIMEZONE || 'Asia/Tokyo',
   asrModel: c.env.ASR_MODEL || '@cf/openai/whisper-large-v3-turbo',
   llmModel: c.env.LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+  audioArchive: !!c.env.AUDIO,
 });
 
 api.get('/session', async (c) => c.json(await sessionInfo(c)));
@@ -76,7 +77,7 @@ api.post('/transcribe', async (c) => {
   const bytes = new Uint8Array(await file.arrayBuffer());
 
   let audioKey: string | null = null;
-  if (storeAudio) {
+  if (storeAudio && c.env.AUDIO) {
     const day = dayKey(Date.now(), c.env.APP_TIMEZONE || 'Asia/Tokyo');
     audioKey = `audio/${day}/${crypto.randomUUID()}.wav`;
     try {
@@ -242,6 +243,7 @@ api.get('/digests/:day', async (c) => {
 /* ---------------- archived audio ---------------- */
 
 api.get('/audio/*', async (c) => {
+  if (!c.env.AUDIO) return c.json({ error: 'この配備では音声を保管していません' }, 404);
   const key = c.req.path.replace('/api/audio/', '');
   if (!key.startsWith('audio/')) return c.json({ error: 'not found' }, 404);
   const object = await c.env.AUDIO.get(key);

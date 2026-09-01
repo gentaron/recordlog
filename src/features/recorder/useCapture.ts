@@ -31,6 +31,7 @@ export function useCapture() {
   const refineMemo = useApp((s) => s.refineMemo);
   const sync = useApp((s) => s.sync);
   const toast = useApp((s) => s.toast);
+  const audioArchive = useApp((s) => s.session?.audioArchive ?? false);
 
   const [state, setState] = useState<CaptureState>('idle');
   const [level, setLevel] = useState<LevelSnapshot>(EMPTY_LEVEL);
@@ -107,7 +108,7 @@ export function useCapture() {
             wav: result.wav,
             durationMs: result.durationMs,
             language: settings.language,
-            storeAudio: settings.storeAudioRemote,
+            storeAudio: settings.storeAudioRemote && audioArchive,
           },
           settings.engine,
           setProgress,
@@ -133,7 +134,7 @@ export function useCapture() {
         setProgress(null);
       }
     },
-    [patchMemo, refineMemo, saveMemo, settings, sync, toast],
+    [audioArchive, patchMemo, refineMemo, saveMemo, settings, sync, toast],
   );
 
   const stop = useCallback(async () => {

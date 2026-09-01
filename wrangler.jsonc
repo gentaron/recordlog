@@ -25,18 +25,23 @@
     {
       "binding": "DB",
       "database_name": "recordlog",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "database_id": "775c978c-377b-4b0c-b74d-d98dda78877e",
       "migrations_dir": "migrations",
     },
   ],
 
-  // Free tier: 10 GB storage, zero egress fees. Holds the original audio.
-  "r2_buckets": [
-    {
-      "binding": "AUDIO",
-      "bucket_name": "recordlog-audio",
-    },
-  ],
+  // Optional. R2 keeps the original audio so it can be played back from any
+  // device; without it transcripts work exactly the same and audio stays on
+  // the device that recorded it. R2 has to be switched on for the account in
+  // the dashboard first (R2 > Enable), so it is left out by default rather
+  // than blocking the deploy. To turn it on:
+  //
+  //     npx wrangler r2 bucket create recordlog-audio
+  //
+  // then uncomment the line below and redeploy. The app notices the binding
+  // by itself and enables the "音声をサーバーに保管" setting.
+  //
+  // "r2_buckets": [{ "binding": "AUDIO", "bucket_name": "recordlog-audio" }],
 
   // Workers AI: Whisper for transcription, Llama for the daily stack.
   "ai": { "binding": "AI" },

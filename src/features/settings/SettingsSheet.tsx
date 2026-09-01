@@ -21,10 +21,12 @@ function Toggle({
   value,
   onChange,
   label,
+  disabled = false,
 }: {
   value: boolean;
   onChange: (v: boolean) => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -32,8 +34,9 @@ function Toggle({
       role="switch"
       aria-checked={value}
       aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!value)}
-      className={`focus-ring relative h-6 w-11 rounded-full border transition-colors ${
+      className={`focus-ring relative h-6 w-11 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         value
           ? 'border-[color-mix(in_oklab,var(--color-signal)_60%,transparent)] bg-[color-mix(in_oklab,var(--color-signal)_35%,transparent)]'
           : 'border-[var(--color-edge)] bg-[var(--color-void)]'
@@ -86,6 +89,8 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   const toast = useApp((x) => x.toast);
   const [usage, setUsage] = useState<{ usage: number; quota: number } | null>(null);
   const [preloading, setPreloading] = useState(false);
+  // Nothing to toggle when the deployment has no R2 bucket bound.
+  const audioArchive = session?.audioArchive ?? false;
 
   useEffect(() => {
     if (open) void estimateUsage().then(setUsage);
@@ -167,11 +172,19 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           保存
         </h3>
 
-        <Row label="音声をサーバーに保管" hint="R2 に元音声を残します。既定では 14 日で自動削除。">
+        <Row
+          label="音声をサーバーに保管"
+          hint={
+            audioArchive
+              ? 'R2 に元音声を残します。既定では 14 日で自動削除。'
+              : 'この配備では R2 が繋がっていないため使えません。音声は端末の中だけに残ります。'
+          }
+        >
           <Toggle
             label="音声をサーバーに保管"
-            value={s.storeAudioRemote}
+            value={audioArchive && s.storeAudioRemote}
             onChange={set('storeAudioRemote')}
+            disabled={!audioArchive}
           />
         </Row>
 

@@ -113,4 +113,6 @@ export interface SessionInfo {
   timezone: string;
   asrModel: string;
   llmModel: string;
+  /** False when no R2 bucket is bound — audio then only lives on the device. */
+  audioArchive: boolean;
 }

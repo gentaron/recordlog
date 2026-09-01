@@ -87,15 +87,16 @@ npm install
 npx wrangler login
 ```
 
-### 1. D1 と R2 を作る
+### 1. D1 を作る
 
 ```bash
 npx wrangler d1 create recordlog
-npx wrangler r2 bucket create recordlog-audio
 ```
 
-`d1 create` が出力した `database_id` を `wrangler.jsonc` の
-`REPLACE_WITH_YOUR_D1_DATABASE_ID` に貼り替えます。
+出力された `database_id` を `wrangler.jsonc` の `d1_databases[0].database_id` に入れます。
+
+> このリポジトリには作成済みの `database_id` が入っています。同じアカウントで使うならそのままで
+> 構いません。別のアカウントに置く場合だけ作り直してください。
 
 ### 2. スキーマを流す
 
@@ -103,6 +104,20 @@ npx wrangler r2 bucket create recordlog-audio
 npm run db:migrate          # 本番
 npm run db:migrate:local    # ローカル
 ```
+
+### 2.5. （任意）音声もサーバーに残したいなら R2
+
+**なくても動きます。** R2 を繋がない場合、文字起こしも日次まとめもそのまま動き、音声は録音した
+端末の中（IndexedDB）にだけ残ります。アプリは binding の有無を自分で見て、設定の
+「音声をサーバーに保管」を無効表示に切り替えます。
+
+複数の端末から録音を聴き返したい場合だけ、ダッシュボードで **R2 > Enable** を押してから:
+
+```bash
+npx wrangler r2 bucket create recordlog-audio
+```
+
+`wrangler.jsonc` の `r2_buckets` の行のコメントを外して再デプロイすれば有効になります。
 
 ### 3. パスフレーズを設定する
 
@@ -129,9 +144,9 @@ npm run deploy
 **Deploy command** が既定の `npx wrangler deploy` のままで、
 `npm run build` → `dist/` 生成 → デプロイまで一気に走ります。
 
-ただし **手順 1〜3 を先に済ませておくこと。** `database_id` が
-`REPLACE_WITH_YOUR_D1_DATABASE_ID` のままだと、ビルド冒頭の preflight が
-何をすればいいかを出したうえで止まります。R2 バケットも先に作っておいてください。
+ただし **D1 だけは先に用意しておくこと。** `database_id` が
+`REPLACE_WITH_YOUR_D1_DATABASE_ID` のままだと、ビルド冒頭の preflight が何をすればいいかを
+出したうえで止まります。R2 は任意なので、なくてもデプロイは通ります。
 
 `AUTH_PASSPHRASE` と `SESSION_SECRET` は `wrangler secret put` で入れたものが
 そのまま使われます（Workers Builds 側で環境変数として入れ直す必要はありません）。
@@ -179,6 +194,10 @@ npx wrangler d1 execute recordlog --local \
 **`preflight: Cloudflare 側のセットアップが未完了です`**
 メッセージのとおり、D1 を作って `database_id` を貼り替えてください。
 ローカルビルドでは警告だけで止まりません。
+
+**`Please enable R2 through the Cloudflare Dashboard` / 音声の再生が 404**
+R2 がアカウントで有効になっていません。R2 は任意なので、繋がないまま使うのが既定です
+（音声は端末に残ります）。使いたい場合は手順 2.5 を参照してください。
 
 **日次まとめが走っていない**
 `runs` テーブルを見てください。理由が残っています。
@@ -235,16 +254,15 @@ Chromium の合成マイクにその WAV を食わせ、保存された音声が
 
 ## 無料枠について
 
-| サービス      | 無料枠                      | このアプリの使い方                                        |
-| ------------- | --------------------------- | --------------------------------------------------------- |
-| Workers       | 100,000 req/日              | API と静的配信                                            |
-| D1            | 5 GB · 500 万行書き込み/月  | メモとダイジェスト（テキストのみ）                        |
-| R2            | 10 GB · エグレス無料        | 元音声。既定 14 日で削除                                  |
-| Workers AI    | 1 日あたりの Neurons 無料枠 | Whisper と Llama。1 日 1 回のまとめは 1〜数回の推論で済む |
-| Cron Triggers | 無料                        | 1 日 1 回                                                 |
+| サービス      | 無料枠                      | このアプリの使い方                                                   |
+| ------------- | --------------------------- | -------------------------------------------------------------------- |
+| Workers       | 100,000 req/日              | API と静的配信                                                       |
+| D1            | 5 GB · 500 万行書き込み/月  | メモとダイジェスト（テキストのみ）                                   |
+| R2 (任意)     | 10 GB · エグレス無料        | 元音声。既定 14 日で削除。使うにはダッシュボードで R2 の有効化が必要 |
+| Workers AI    | 1 日あたりの Neurons 無料枠 | Whisper と Llama。1 日 1 回のまとめは 1〜数回の推論で済む            |
+| Cron Triggers | 無料                        | 1 日 1 回                                                            |
 
-音声を残さない (`KEEP_AUDIO_DAYS=0` かつ設定で「音声をサーバーに保管」オフ) 運用にすれば、
-R2 はほぼ使いません。
+R2 を繋がない既定の構成なら、使うのは Workers・D1・Workers AI の 3 つだけです。
 
 ---
 
