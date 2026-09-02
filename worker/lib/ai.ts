@@ -88,16 +88,33 @@ export interface ChatMessage {
   content: string;
 }
 
+/**
+ * The shape Workers AI answers with.
+ *
+ * `response` is deliberately `unknown`: with `response_format: json_schema`
+ * the platform hands back an already-parsed object, not a JSON string. Typing
+ * it as `string` is what let a `.trim()` through to production.
+ */
 interface ChatResponse {
-  response?: string;
-  result?: { response?: string };
+  response?: unknown;
+  result?: { response?: unknown };
 }
 
-export async function chat(
+/** Pulls the generated content out, whatever wrapper the model put it in. */
+function responseOf(res: unknown): unknown {
+  if (typeof res === 'string') return res;
+  if (res && typeof res === 'object') {
+    const r = res as ChatResponse;
+    return r.response ?? r.result?.response ?? '';
+  }
+  return '';
+}
+
+async function runChat(
   env: Env,
   messages: ChatMessage[],
-  opts: { maxTokens?: number; temperature?: number; jsonSchema?: Record<string, unknown> } = {},
-): Promise<string> {
+  opts: { maxTokens?: number; temperature?: number; jsonSchema?: Record<string, unknown> },
+): Promise<unknown> {
   const model = env.LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
   const payload: Record<string, unknown> = {
     messages,
@@ -107,22 +124,32 @@ export async function chat(
   if (opts.jsonSchema) {
     payload.response_format = { type: 'json_schema', json_schema: opts.jsonSchema };
   }
+  return responseOf(await env.AI.run(model as Parameters<Ai['run']>[0], payload as never));
+}
 
-  const res = (await env.AI.run(model as Parameters<Ai['run']>[0], payload as never)) as
-    ChatResponse | string;
-  if (typeof res === 'string') return res;
-  return res.response ?? res.result?.response ?? '';
+/** Plain text generation. Objects are stringified rather than thrown away. */
+export async function chat(
+  env: Env,
+  messages: ChatMessage[],
+  opts: { maxTokens?: number; temperature?: number; jsonSchema?: Record<string, unknown> } = {},
+): Promise<string> {
+  const value = await runChat(env, messages, opts);
+  return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
 /**
  * Pulls the first JSON object out of a model response.
  *
- * Even with JSON mode on, small/fast models like to wrap output in prose or a
- * fenced block. Rather than fail the whole daily digest on a stray backtick, we
- * scan for the first balanced object.
+ * JSON mode may hand back a parsed object already; without it, small/fast
+ * models like to wrap output in prose or a fenced block. Rather than fail the
+ * whole daily digest on a stray backtick, we scan for the first balanced object.
  */
-export function extractJson<T>(raw: string): T | null {
-  if (!raw) return null;
+export function extractJson<T>(raw: unknown): T | null {
+  if (raw === null || raw === undefined) return null;
+  // JSON mode: the platform already parsed it for us.
+  if (typeof raw === 'object') return Array.isArray(raw) ? null : (raw as T);
+  if (typeof raw !== 'string') return null;
+
   const text = raw
     .trim()
     .replace(/^```(?:json)?/i, '')
@@ -164,16 +191,36 @@ export function extractJson<T>(raw: string): T | null {
   return null;
 }
 
-/** Calls the model and parses JSON, retrying once at temperature 0. */
+/**
+ * Calls the model and parses JSON.
+ *
+ * The retry drops `response_format` as well as the temperature: a model that
+ * mishandles the schema will keep mishandling it at temperature 0, and asking
+ * for JSON in the prompt alone is the path that always works.
+ */
 export async function chatJson<T>(
   env: Env,
   messages: ChatMessage[],
   opts: { maxTokens?: number; jsonSchema?: Record<string, unknown> } = {},
 ): Promise<T | null> {
-  for (const temperature of [0.2, 0]) {
-    const raw = await chat(env, messages, { ...opts, temperature });
-    const parsed = extractJson<T>(raw);
-    if (parsed) return parsed;
+  const attempts: { temperature: number; jsonSchema?: Record<string, unknown> }[] = [
+    { temperature: 0.2, ...(opts.jsonSchema ? { jsonSchema: opts.jsonSchema } : {}) },
+    { temperature: 0 },
+  ];
+
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      const raw = await runChat(env, messages, { maxTokens: opts.maxTokens, ...attempt });
+      const parsed = extractJson<T>(raw);
+      if (parsed) return parsed;
+    } catch (error) {
+      // A model that rejects `response_format` outright throws here. That is
+      // exactly the case the schema-less retry exists for, so keep going.
+      lastError = error;
+      console.warn('chatJson attempt failed', error);
+    }
   }
+  if (lastError) throw lastError;
   return null;
 }

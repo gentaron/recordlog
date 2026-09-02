@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import type { Digest } from '@shared/types';
 import { formatDayLabel, shiftDay } from '@/lib/time';
 import { useApp, timezone, today } from '@/store/app';
-import { DownloadIcon, LayersIcon, SparkIcon } from '@/components/Icon';
+import { haptic } from '@/store/settings';
+import { CheckIcon, CopyIcon, DownloadIcon, LayersIcon, SparkIcon } from '@/components/Icon';
 
 function toMarkdown(digest: Digest): string {
   const lines = [`# ${digest.day}`, '', digest.summary, ''];
@@ -16,10 +17,54 @@ function toMarkdown(digest: Digest): string {
   return lines.join('\n');
 }
 
+/**
+ * Copies text, falling back to a throwaway textarea.
+ *
+ * `navigator.clipboard` needs a secure context and, on some browsers, a
+ * permission the user has never been asked for. The old selection trick still
+ * works everywhere, and a digest you cannot get out of the app is half a
+ * feature.
+ */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    /* fall through */
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.top = '-1000px';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 function DigestCard({ digest }: { digest: Digest }) {
   const memos = useApp((s) => s.memos);
   const byId = useMemo(() => new Map(memos.map((m) => [m.id, m])), [memos]);
   const [open, setOpen] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const toast = useApp((s) => s.toast);
+
+  const copy = async () => {
+    if (await copyText(toMarkdown(digest))) {
+      haptic(10);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } else {
+      toast('コピーできませんでした', 'error');
+    }
+  };
 
   const download = () => {
     const blob = new Blob([toMarkdown(digest)], { type: 'text/markdown;charset=utf-8' });
@@ -36,16 +81,31 @@ function DigestCard({ digest }: { digest: Digest }) {
       <header className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="text-[15px] font-semibold">{formatDayLabel(digest.day, timezone())}</h2>
         <span className="chip">{digest.memoCount} 件から</span>
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={download}
-          aria-label="Markdown で書き出す"
-          title="Markdown で書き出す"
-          className="focus-ring rounded-lg p-1.5 text-[var(--color-mist)] hover:text-[var(--color-chalk)]"
-        >
-          <DownloadIcon width={16} height={16} />
-        </button>
+        {/* Kept as one non-wrapping group so the confirmation text growing
+            never strands the download button on a line of its own. */}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => void copy()}
+            aria-label={copied ? 'コピーしました' : 'この日のまとめをコピー'}
+            title="Markdown としてコピー"
+            className={`focus-ring flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11.5px] transition-colors ${
+              copied ? 'text-[var(--color-leaf)]' : 'text-[var(--color-mist)] hover:text-[var(--color-chalk)]'
+            }`}
+          >
+            {copied ? <CheckIcon width={16} height={16} /> : <CopyIcon width={16} height={16} />}
+            {copied ? 'コピーしました' : 'コピー'}
+          </button>
+          <button
+            type="button"
+            onClick={download}
+            aria-label="Markdown で書き出す"
+            title="Markdown で書き出す"
+            className="focus-ring rounded-lg p-1.5 text-[var(--color-mist)] hover:text-[var(--color-chalk)]"
+          >
+            <DownloadIcon width={16} height={16} />
+          </button>
+        </div>
       </header>
 
       {digest.summary && (

@@ -110,3 +110,10 @@ export const AlertIcon = (p: P) => (
     <path d="M12 7.5v5.5M12 16.3v.2" />
   </svg>
 );
+
+export const CopyIcon = (p: P) => (
+  <svg {...base(p)} aria-hidden="true">
+    <rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.4" />
+    <path d="M15.5 5.6A2.1 2.1 0 0 0 13.4 4H6.1A2.1 2.1 0 0 0 4 6.1v7.3a2.1 2.1 0 0 0 1.6 2" />
+  </svg>
+);

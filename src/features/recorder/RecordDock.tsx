@@ -51,7 +51,14 @@ export function RecordDock({ capture }: { capture: Capture }) {
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4"
       style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
     >
-      <div className="pointer-events-auto w-full max-w-2xl">
+      {/* The dock floats over the list. Without this the text scrolling under
+          the record button collides with it and both become unreadable. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 -top-16 bottom-0 bg-gradient-to-t from-[var(--color-void)] from-45% via-[color-mix(in_oklab,var(--color-void)_88%,transparent)] to-transparent"
+      />
+
+      <div className="pointer-events-auto relative w-full max-w-2xl">
         {(busy || state === 'processing') && (
           <div className="panel rl-rise mb-3 px-4 py-3">
             <div className="flex items-center justify-between text-[11px] text-[var(--color-mist)]">

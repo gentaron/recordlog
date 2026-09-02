@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dayKey, shiftDay, isDayKey } from '@shared/day';
-import { extractJson } from '../worker/lib/ai';
+import { chat, chatJson, extractJson } from '../worker/lib/ai';
+import type { Env } from '../worker/env';
 
 describe('dayKey', () => {
   it('formats as YYYY-MM-DD in the requested zone', () => {
@@ -70,5 +71,126 @@ describe('extractJson', () => {
     expect(extractJson('no json at all')).toBeNull();
     expect(extractJson('{"broken": ')).toBeNull();
     expect(extractJson('')).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Workers AI response handling                                        */
+/* ------------------------------------------------------------------ */
+
+interface FakeCall {
+  response_format?: { type: string; json_schema?: unknown };
+  temperature?: number;
+}
+
+/** Minimal Env stand-in: chatJson only ever touches LLM_MODEL and AI.run. */
+function fakeEnv(respond: (call: FakeCall, attempt: number) => unknown) {
+  const calls: FakeCall[] = [];
+  const env = {
+    LLM_MODEL: 'test-model',
+    AI: {
+      run: async (_model: string, payload: FakeCall) => {
+        calls.push(payload);
+        return respond(payload, calls.length - 1);
+      },
+    },
+  } as unknown as Env;
+  return { env, calls };
+}
+
+describe('extractJson with non-string input', () => {
+  it('passes a parsed object straight through (JSON mode)', () => {
+    // Regression: Workers AI returns `response` as an object when
+    // response_format is a json_schema. Calling .trim() on it threw
+    // "raw.trim is not a function" and killed the whole daily digest.
+    expect(extractJson<{ summary: string }>({ summary: 'ok' })).toEqual({ summary: 'ok' });
+  });
+
+  it('rejects an array — a digest is an object or it is nothing', () => {
+    expect(extractJson([1, 2, 3])).toBeNull();
+  });
+
+  it('returns null for null, undefined and numbers instead of throwing', () => {
+    expect(extractJson(null)).toBeNull();
+    expect(extractJson(undefined)).toBeNull();
+    expect(extractJson(42)).toBeNull();
+  });
+});
+
+describe('chatJson', () => {
+  it('survives a model that answers JSON mode with an object', async () => {
+    const { env } = fakeEnv(() => ({ response: { summary: '今日は静かだった', sections: [] } }));
+    const out = await chatJson<{ summary: string }>(env, [{ role: 'user', content: 'x' }], {
+      jsonSchema: { name: 'd', schema: {} },
+    });
+    expect(out?.summary).toBe('今日は静かだった');
+  });
+
+  it('parses a string response wrapped in prose', async () => {
+    const { env } = fakeEnv(() => ({ response: 'はい:\n```json\n{"summary":"ok"}\n```' }));
+    expect((await chatJson<{ summary: string }>(env, [{ role: 'user', content: 'x' }]))?.summary).toBe('ok');
+  });
+
+  it('retries without the schema when the first attempt yields nothing usable', async () => {
+    const { env, calls } = fakeEnv((_c, attempt) =>
+      attempt === 0 ? { response: 'sorry, I cannot' } : { response: '{"summary":"second try"}' },
+    );
+    const out = await chatJson<{ summary: string }>(env, [{ role: 'user', content: 'x' }], {
+      jsonSchema: { name: 'd', schema: {} },
+    });
+
+    expect(out?.summary).toBe('second try');
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.response_format).toBeDefined();
+    // A model that mishandles the schema keeps mishandling it; the retry has
+    // to drop it, not just lower the temperature.
+    expect(calls[1]?.response_format).toBeUndefined();
+    expect(calls[1]?.temperature).toBe(0);
+  });
+
+  it('gives up with null rather than throwing when nothing parses', async () => {
+    const { env, calls } = fakeEnv(() => ({ response: 'no json here' }));
+    expect(await chatJson(env, [{ role: 'user', content: 'x' }])).toBeNull();
+    expect(calls).toHaveLength(2);
+  });
+
+  it('tolerates a bare string response and a missing response field', async () => {
+    const bare = fakeEnv(() => '{"summary":"bare"}');
+    expect((await chatJson<{ summary: string }>(bare.env, [{ role: 'user', content: 'x' }]))?.summary).toBe(
+      'bare',
+    );
+
+    const empty = fakeEnv(() => ({}));
+    expect(await chatJson(empty.env, [{ role: 'user', content: 'x' }])).toBeNull();
+  });
+});
+
+describe('chat', () => {
+  it('stringifies an object response instead of losing it', async () => {
+    const { env } = fakeEnv(() => ({ response: { notes: ['a', 'b'] } }));
+    expect(await chat(env, [{ role: 'user', content: 'x' }])).toBe('{"notes":["a","b"]}');
+  });
+});
+
+describe('chatJson error handling', () => {
+  it('retries without the schema when the model rejects response_format', async () => {
+    const { env, calls } = fakeEnv((call) => {
+      if (call.response_format) throw new Error('400: response_format is not supported');
+      return { response: '{"summary":"recovered"}' };
+    });
+
+    const out = await chatJson<{ summary: string }>(env, [{ role: 'user', content: 'x' }], {
+      jsonSchema: { name: 'd', schema: {} },
+    });
+
+    expect(out?.summary).toBe('recovered');
+    expect(calls).toHaveLength(2);
+  });
+
+  it('surfaces the error when every attempt throws', async () => {
+    const { env } = fakeEnv(() => {
+      throw new Error('AI is over quota');
+    });
+    await expect(chatJson(env, [{ role: 'user', content: 'x' }])).rejects.toThrow('over quota');
   });
 });
