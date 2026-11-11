@@ -269,3 +269,15 @@ R2 を繋がない既定の構成なら、使うのは Workers・D1・Workers AI
 ## ライセンス
 
 MIT
+
+<!-- ecosystem:begin (自動生成: gentaron/infocollect の ecosystem/registry.json から。手で直さない) -->
+
+## つながり
+
+gentaron のリポジトリ群のうち **道具** の一つ。話す → 文字になる → 1日1回 AI が整理して積む音声メモ。
+
+- **同じ島**: [pk3](https://github.com/gentaron/pk3)、[Bubble](https://github.com/gentaron/Bubble)、[veile-bot](https://github.com/gentaron/veile-bot)、[webportal](https://github.com/gentaron/webportal)
+
+全体の地図 → [ecosystem](https://github.com/gentaron/infocollect/blob/HEAD/ecosystem/README.md)
+
+<!-- ecosystem:end -->

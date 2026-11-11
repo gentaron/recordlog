@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/gentaron/infocollect/HEAD/ecosystem/schema.json",
+  "schema": 1,
+  "name": "recordlog",
+  "group": "tools",
+  "groupLabel": "道具",
+  "status": "maintained",
+  "role": "話す → 文字になる → 1日1回 AI が整理して積む音声メモ",
+  "stack": "Vite · PWA",
+  "produces": [
+    "notes"
+  ],
+  "consumes": [],
+  "upstream": [],
+  "downstream": [],
+  "siblings": [
+    "pk3",
+    "Bubble",
+    "veile-bot",
+    "webportal"
+  ],
+  "hub": {
+    "repo": "https://github.com/gentaron/infocollect",
+    "map": "https://github.com/gentaron/infocollect/blob/HEAD/ecosystem/README.md",
+    "kb": "https://raw.githubusercontent.com/gentaron/infocollect/HEAD/docs/kb",
+    "mcp": [
+      "infocollect-kb",
+      "forge"
+    ]
+  }
+}
