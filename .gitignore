@@ -20,3 +20,8 @@ coverage/
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# secrets
+.env
+.env.*
+!.env.example
