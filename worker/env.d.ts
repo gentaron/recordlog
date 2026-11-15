@@ -11,7 +11,7 @@ export interface Env {
   LLM_MODEL: string;
   KEEP_AUDIO_DAYS: string;
 
-  /** Secret. When unset the app runs open — fine for local dev, not for the internet. */
+  /** Required secret. Missing configuration denies access, including local development. */
   AUTH_PASSPHRASE?: string;
   /** Secret. Signs the session cookie. Falls back to AUTH_PASSPHRASE. */
   SESSION_SECRET?: string;
