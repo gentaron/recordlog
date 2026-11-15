@@ -5,8 +5,8 @@ import type { Env } from '../env';
  *
  * No user table, no OAuth, no third party — this is a personal notebook, and
  * the smallest thing that actually keeps strangers out is the right thing.
- * Deployments with no `AUTH_PASSPHRASE` set run open, which is what you want
- * on `wrangler dev` and never what you want on a public hostname.
+ * AUTH_PASSPHRASE is required, including local development. Missing
+ * configuration must never turn a private notebook into a public API.
  */
 
 const COOKIE = 'rl_session';
@@ -22,7 +22,8 @@ const b64url = (bytes: ArrayBuffer | Uint8Array): string => {
 };
 
 async function key(env: Env): Promise<CryptoKey> {
-  const secret = env.SESSION_SECRET || env.AUTH_PASSPHRASE || 'recordlog-dev-secret';
+  const secret = env.SESSION_SECRET || env.AUTH_PASSPHRASE;
+  if (!secret) throw new Error('Session authentication is not configured');
   return crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
     'sign',
     'verify',
@@ -42,20 +43,22 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export const authRequired = (env: Env): boolean => !!env.AUTH_PASSPHRASE;
+export const authRequired = (_env: Env): boolean => true;
 
 export function readCookie(request: Request, name: string): string | null {
   const header = request.headers.get('cookie');
   if (!header) return null;
   for (const part of header.split(';')) {
     const [k, ...v] = part.trim().split('=');
-    if (k === name) return decodeURIComponent(v.join('='));
+    if (k === name) {
+      try { return decodeURIComponent(v.join('=')); } catch { return null; }
+    }
   }
   return null;
 }
 
 export async function isAuthenticated(request: Request, env: Env): Promise<boolean> {
-  if (!authRequired(env)) return true;
+  if (!env.AUTH_PASSPHRASE) return false;
   const token = readCookie(request, COOKIE);
   if (!token) return false;
 
@@ -70,7 +73,7 @@ export async function isAuthenticated(request: Request, env: Env): Promise<boole
 }
 
 export async function verifyPassphrase(env: Env, passphrase: string): Promise<boolean> {
-  if (!env.AUTH_PASSPHRASE) return true;
+  if (!env.AUTH_PASSPHRASE) return false;
   // Hash both sides first so the comparison length never reveals the secret's.
   const digest = async (s: string) => b64url(await crypto.subtle.digest('SHA-256', enc.encode(s)));
   return timingSafeEqual(await digest(passphrase), await digest(env.AUTH_PASSPHRASE));
